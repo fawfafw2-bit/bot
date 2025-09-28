@@ -12,7 +12,7 @@ import zlib
 import base64
 
 # Конфигурация бота
-BOT_TOKEN = "7645055602:AAH82SESEjhY6EjfoxNCgYew-SiJJbR6oB4"
+BOT_TOKEN = "8342680808:AAFo5MaFqA-ZNNLkzWRm291dSz9N2gxhJ0c"
 ADMIN_CHAT_ID = 4922949598
 
 # Настройка логирования
