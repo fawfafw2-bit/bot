@@ -13,7 +13,7 @@ import base64
 
 # Конфигурация бота
 BOT_TOKEN = "8342680808:AAFo5MaFqA-ZNNLkzWRm291dSz9N2gxhJ0c"
-ADMIN_CHAT_ID = 4922949598
+ADMIN_CHAT_ID = 7269254169
 
 # Настройка логирования
 logging.basicConfig(
